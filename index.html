@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ca" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corrector Cangur</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/animations.css">
+<link rel="stylesheet" href="styles/layout.css">
+<link rel="stylesheet" href="styles/components.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+
+  <!-- LEFT: dropdowns + title -->
+  <div class="hdr-left">
+    <div>
+      <div class="hdr-title">Corrector Cangur</div>
+      <div class="hdr-sub">30 preguntes · teclat ràpid</div>
+    </div>
+    <div class="dropdown" id="dd-accions">
+      <button class="dd-trigger" id="dd-accions-trigger">Accions ▾</button>
+      <div class="dd-menu">
+        <button class="dd-item" id="dd-key-loader">📂&nbsp; Carregar la clau de respostes</button>
+        <button class="dd-item" id="btn-correct" disabled>📊&nbsp; Corregir proves</button>
+        <div class="dd-sep"></div>
+        <button class="dd-item" id="dd-ai-recognizer">🤖&nbsp; Reconeixement automàtic de respostes</button>
+        <div class="dd-sep"></div>
+        <button class="dd-item" id="dd-load-pdf">📄&nbsp; Carregar PDF</button>
+        <button class="dd-item" id="dd-export-xlsx">💾&nbsp; Exportar les respostes</button>
+      </div>
+    </div>
+    <div class="dropdown" id="dd-cfg">
+      <button class="dd-trigger" id="dd-cfg-trigger">Configuració ▾</button>
+      <div class="dd-menu">
+        <button class="dd-item" id="dd-settings">⚙️&nbsp; Configurar tecles personalitzades</button>
+        <div class="dd-sep"></div>
+        <button class="dd-item danger" id="dd-clear-data">✕&nbsp; Esborrar dades introduïdes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: student nav (absolutely centred) -->
+  <div class="hdr-center">
+    <button class="btn-hdr" id="btn-prev-stu" title="Alumne anterior">←</button>
+    <div class="hdr-name" id="hdr-name" title="Clica per editar el nom"></div>
+    <button class="btn-hdr" id="btn-next-stu" title="Alumne nou / següent">→</button>
+  </div>
+
+  <!-- RIGHT: badges + code -->
+  <div class="hdr-right">
+    <span class="key-loaded" id="key-badge" style="display:none"></span>
+    <span class="done-b" id="done-b" style="display:none">✓ complet</span>
+    <div class="stu-info">
+      <div class="stu-code" id="stu-code">—</div>
+      <div class="stu-lbl">alumne</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Hidden file inputs -->
+<input type="file" id="key-file"        accept=".xlsx" style="display:none">
+<input type="file" id="pdf-file"        accept=".pdf"  style="display:none">
+<input type="file" id="ai-rec-pdf-file" accept=".pdf"  style="display:none">
+
+<!-- Progress -->
+<div class="prog-wrap"><div class="prog-fill" id="prog" style="width:0%"></div></div>
+
+<!-- Main grid + PDF pane -->
+<div class="main">
+  <div class="grid" id="grid"></div>
+  <div class="pdf-pane" id="pdf-pane">
+    <div class="pdf-bar">
+      <span class="pdf-bar-page" id="pdf-bar-page">—</span>
+      <span class="pdf-bar-name" id="pdf-bar-name"></span>
+    </div>
+    <div class="pdf-canvas-wrap"><canvas id="pdf-canvas"></canvas></div>
+  </div>
+</div>
+
+<!-- Nav row -->
+<div class="nav">
+  <span class="nav-st" id="nav-st">—</span>
+</div>
+
+<!-- Keyboard reference -->
+<div class="kbd-ref" id="kbd-ref"></div>
+
+<!-- ═══ MODAL: Initial PDF prompt ═══ -->
+<div class="overlay off" id="pdf-prompt-overlay">
+  <div class="modal pdf-prompt-modal">
+    <div class="m-title">📄 Respostes escanejades</div>
+    <div style="font-size:.65rem;color:var(--text);text-align:center;line-height:1.6;max-width:280px">
+      Carrega el PDF amb les respostes dels alumnes<br>
+      per veure-les al costat de la graella.
+    </div>
+    <div style="font-size:.54rem;color:var(--muted);text-align:center;line-height:1.5;max-width:260px">
+      L'ordre de les pàgines ha de coincidir amb l'ordre<br>d'entrada dels alumnes.
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn" id="btn-skip-pdf">Sense PDF</button>
+      <button class="btn pri" id="btn-load-pdf-from-prompt">📄 Carregar PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Student code ═══ -->
+<div class="overlay off" id="stu-overlay">
+  <div class="modal">
+    <div class="m-title">Codi de l'alumne</div>
+    <div class="m-prev" id="m-prev">_ _ _</div>
+    <div class="m-row">
+      <input class="dig-hund" id="d-hund" type="text" inputmode="numeric"
+             maxlength="1" value="1" autocomplete="off" title="Centena (normalment 1)">
+      <input class="dig" id="d0" type="text" inputmode="numeric"
+             maxlength="1" placeholder="·" autocomplete="off">
+      <input class="dig" id="d1" type="text" inputmode="numeric"
+             maxlength="1" placeholder="·" autocomplete="off">
+    </div>
+    <input class="name-input" id="d-name" type="text"
+           placeholder="Nom i cognoms (opcional)" autocomplete="off">
+    <div class="m-model-section">
+      <div class="m-model-lbl">Model</div>
+      <div class="m-model-btns">
+        <button class="model-btn" id="mA" tabindex="0">A</button>
+        <button class="model-btn" id="mB" tabindex="0">B</button>
+      </div>
+      <div class="m-model-hint">
+        <kbd>↵</kbd> = confirma A &nbsp;·&nbsp;
+        <kbd>B</kbd> <kbd>→</kbd> <kbd>←</kbd> <kbd>Tab</kbd> = selecciona B, després <kbd>↵</kbd>
+      </div>
+    </div>
+    <div class="m-err" id="m-err">Cal seleccionar el model (A o B)</div>
+    <div class="m-hint">Centena editable · cursor inicia a desenes · Esc cancel·la</div>
+    <button class="btn pri" id="btn-confirm-student">Confirmar</button>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Settings ═══ -->
+<div class="overlay off" id="cfg-overlay">
+  <div class="cfg-box">
+    <div class="cfg-title">⌨️ Configuració de tecles</div>
+    <div class="cfg-table" id="cfg-table"></div>
+    <div class="cfg-conflict-msg" id="cfg-conflict-msg"></div>
+    <div class="cfg-footer">
+      <button class="btn" id="btn-reset-keys">↺ Carregar els valors per defecte</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="btn-close-cfg">Cancel·lar</button>
+        <button class="btn pri" id="btn-save-cfg" disabled>✓ Desar la configuració</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Sheet selector ═══ -->
+<div class="overlay off" id="sheet-overlay">
+  <div class="sheet-box">
+    <div class="m-title">Selecciona el full (dia)</div>
+    <div class="sheet-btns" id="sheet-btns"></div>
+    <button class="btn" id="btn-cancel-sheet">Cancel·lar</button>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Correct ═══ -->
+<div class="overlay off" id="correct-overlay">
+  <div class="correct-box">
+    <div class="m-title">📊 Corregir proves</div>
+    <div style="font-size:.58rem;color:var(--muted);text-align:center">
+      Selecciona el nivell educatiu dels alumnes
+    </div>
+    <div class="level-btns" id="level-btns"></div>
+    <div style="font-size:.56rem;color:var(--muted);text-align:center;line-height:1.5" id="correct-info">—</div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn" id="btn-close-correct">Cancel·lar</button>
+      <button class="btn pri" id="btn-do-correct" disabled>Corregir →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Results ═══ -->
+<div class="overlay off" id="results-overlay">
+  <div class="res-box">
+    <div class="res-header">
+      <div class="res-title" id="res-title">Resultats</div>
+      <div class="res-summary" id="res-summary"></div>
+    </div>
+    <div class="res-table-wrap"><table id="res-table"></table></div>
+    <div class="res-footer">
+      <div class="scoring-note">
+        1a part: base 7,5 +3/−0,75 ·
+        2a part: base 10 +4/−1 ·
+        3a part: base 12,5 +5/−1,25
+      </div>
+      <button class="btn" id="btn-dl-results-xlsx">⬇ XLSX</button>
+      <button class="btn pri" id="btn-close-results">Tancar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Completion prompt (overlay-like, but pointer-events:none) ═══ -->
+<div class="done-prompt off" id="done-prompt">
+  <div class="done-box">
+    <div class="done-check">✓</div>
+    <div class="done-msg">Alumne complet!</div>
+    <div class="done-cta">
+      Prem qualsevol tecla per al <strong>següent</strong><br>
+      o bé <strong>ESC</strong> per continuar editant
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Toast ═══ -->
+<div id="toast"></div>
+
+<!-- ═══ MODAL: AI recognizer ═══ -->
+<div class="overlay off" id="ai-rec-overlay">
+  <div class="modal" style="min-width:340px;max-width:520px;width:90vw">
+
+    <div style="font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:14px">
+      🤖 Reconeixement automàtic de respostes
+    </div>
+
+    <div style="font-size:.6rem;color:var(--muted);margin-bottom:12px;text-align:center;line-height:1.5;width:100%">
+      Format esperat: 30 preguntes amb opcions A–E.<br>
+      Cada pàgina del PDF correspon a un alumne.
+    </div>
+
+    <!-- Model i resolució -->
+    <div style="display:flex;gap:10px;margin-bottom:14px;width:100%">
+      <div style="flex:1">
+        <label style="font-size:.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:4px">
+          Model
+        </label>
+        <select id="ai-rec-model"
+          style="width:100%;padding:6px 8px;font-size:.7rem;
+                 border:1.5px solid var(--border);border-radius:6px;background:var(--panel);
+                 color:var(--text);cursor:pointer;font-family:inherit">
+        </select>
+      </div>
+      <div style="flex:1">
+        <label style="font-size:.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:4px">
+          Resolució
+        </label>
+        <select id="ai-rec-scale"
+          style="width:100%;padding:6px 8px;font-size:.7rem;
+                 border:1.5px solid var(--border);border-radius:6px;background:var(--panel);
+                 color:var(--text);cursor:pointer;font-family:inherit">
+        </select>
+      </div>
+    </div>
+
+    <!-- API Key -->
+    <label id="ai-rec-apikey-label" style="font-size:.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:4px;width:100%">
+      API Key d'Anthropic (Claude)
+    </label>
+    <div style="display:flex;gap:6px;margin-bottom:6px;width:100%">
+      <input id="ai-rec-apikey" type="password" class="name-input"
+        placeholder="sk-ant-api03-..."
+        autocomplete="off"
+        style="flex:1;font-family:inherit;font-size:.7rem;letter-spacing:.04em">
+      <button id="ai-rec-toggle-key"
+        style="padding:4px 10px;font-size:.7rem;border:1.5px solid var(--border);border-radius:6px;background:var(--panel);cursor:pointer;color:var(--muted);font-family:inherit"
+        title="Mostrar / amagar">👁</button>
+    </div>
+    <div style="font-size:.6rem;color:var(--muted);margin-bottom:16px;width:100%">
+      La clau no es desa en cap lloc. Només s'usa durant aquesta sessió.
+    </div>
+
+    <!-- Barra de progrés -->
+    <div style="background:var(--border);border-radius:6px;height:6px;overflow:hidden;margin-bottom:8px;width:100%">
+      <div id="ai-rec-bar" style="height:100%;width:0%;background:var(--accent);transition:width .3s ease;border-radius:6px"></div>
+    </div>
+
+    <!-- Estat -->
+    <div id="ai-rec-status"
+      style="font-size:.62rem;color:var(--muted);min-height:1.4em;margin-bottom:8px;width:100%"></div>
+
+    <!-- Log de resultats -->
+    <div id="ai-rec-log"
+      style="font-size:.62rem;line-height:1.6;max-height:180px;overflow-y:auto;
+             background:var(--bg);border:1px solid var(--border);border-radius:7px;
+             padding:8px 10px;margin-bottom:16px;display:none;width:100%">
+    </div>
+
+    <!-- Botons -->
+    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%">
+      <button id="ai-rec-btn-close" class="btn"
+        style="padding:7px 16px;font-size:.68rem;color:#cc3333;border-color:#cc3333">
+        Tancar
+      </button>
+      <button id="ai-rec-btn-start" class="btn pri"
+        style="padding:7px 18px;font-size:.68rem;font-weight:700">
+        📄 Seleccionar PDF i iniciar
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<script type="module" src="js/init.js"></script>
+</body>
+</html>

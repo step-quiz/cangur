@@ -242,6 +242,9 @@ export async function processAiPdf(input) {
 // ─── Processar una pàgina ───────────────────────────────────────────
 
 async function _processPage(pdfDoc, pageNum, apiKey, model, scale) {
+  // Renderitzem el canvas a alta resolució UNA SOLA VEGADA (operació cara).
+  // El downscale i la codificació base64 es fan dins del bucle perquè poden
+  // canviar si detectem un full complex (escalada de maxImageDim).
   const page     = await pdfDoc.getPage(pageNum);
   const viewport = page.getViewport({ scale });
   const canvas   = document.createElement('canvas');
@@ -249,21 +252,30 @@ async function _processPage(pdfDoc, pageNum, apiKey, model, scale) {
   canvas.height  = Math.round(viewport.height);
   await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
 
-  // Resize if > 1800 px (saves tokens without hurting OMR quality).
-  let src = canvas;
-  const MAX_DIM = 1800;
-  if (Math.max(canvas.width, canvas.height) > MAX_DIM) {
-    const ratio = MAX_DIM / Math.max(canvas.width, canvas.height);
-    src = document.createElement('canvas');
-    src.width  = Math.round(canvas.width  * ratio);
-    src.height = Math.round(canvas.height * ratio);
-    src.getContext('2d').drawImage(canvas, 0, 0, src.width, src.height);
+  const prompt   = _buildOmrPrompt();
+  const provider = _modelInfo(model).provider;
+
+  // Paràmetres adaptatius: valors inicials conservadors (cost baix).
+  // Si Gemini detecta un full complex (MAX_TOKENS), els escalem tots dos
+  // alhora per al proper intent i només per a aquest full.
+  let maxImageDim     = 1800;
+  let maxOutputTokens = 8000;
+
+  // Funció auxiliar: downscale del canvas original al límit actual i
+  // codificació JPEG. Es crida cada cop que maxImageDim pugui haver canviat.
+  function _buildBase64() {
+    let src = canvas;
+    if (Math.max(canvas.width, canvas.height) > maxImageDim) {
+      const ratio = maxImageDim / Math.max(canvas.width, canvas.height);
+      src = document.createElement('canvas');
+      src.width  = Math.round(canvas.width  * ratio);
+      src.height = Math.round(canvas.height * ratio);
+      src.getContext('2d').drawImage(canvas, 0, 0, src.width, src.height);
+    }
+    return { base64: src.toDataURL('image/jpeg', 0.85).split(',')[1], src };
   }
 
-  const base64 = src.toDataURL('image/jpeg', 0.85).split(',')[1];
-  const prompt = _buildOmrPrompt();
-  const provider = _modelInfo(model).provider;
-  const pixelCount = src.width * src.height;
+  let { base64, src } = _buildBase64();
 
   let lastErr = null;
   let attempt = 0;
@@ -271,7 +283,7 @@ async function _processPage(pdfDoc, pageNum, apiKey, model, scale) {
     attempt++;
     try {
       const callResult = (provider === 'google')
-        ? await _callGemini(apiKey, model, base64, prompt)
+        ? await _callGemini(apiKey, model, base64, prompt, maxOutputTokens)
         : await _callAnthropic(apiKey, model, base64, prompt);
 
       let clean = callResult.text.trim();
@@ -280,11 +292,30 @@ async function _processPage(pdfDoc, pageNum, apiKey, model, scale) {
       }
 
       const parsed = _validarResposta(JSON.parse(clean));
-      _logPageUsage(pageNum, model, scale, src.width, src.height, pixelCount, callResult.usage, parsed);
+      _logPageUsage(pageNum, model, scale, src.width, src.height, src.width * src.height, callResult.usage, parsed);
       return parsed;
 
     } catch (err) {
       lastErr = err;
+
+      // Full complex detectat (thinking exhaureix el pressupost de tokens):
+      // escalem ALHORA els tokens i la mida de la imatge, i reintentem sense
+      // consumir un intent "de debò". La imatge més gran redueix l'ambigüitat
+      // visual → el model pensa menys → l'escalada de tokens és suficient.
+      // Ho fem només una vegada; si amb 16.000 encara retalla, cas extrem.
+      if (err.isMaxTokens && maxOutputTokens < 16000) {
+        maxOutputTokens = 16000;
+        maxImageDim     = 2200;
+        ({ base64, src } = _buildBase64());   // regenerar amb nova mida
+        console.warn(
+          `[AI] Pàg. ${pageNum}: MAX_TOKENS. Reintentant amb ${maxOutputTokens} tokens` +
+          ` i imatge ${src.width}×${src.height} px (cap ${maxImageDim}px)...`
+        );
+        // No comptem aquest intent com a "fallada" a efectes de maxAttempts.
+        attempt--;
+        continue;
+      }
+
       const isTransient = _isTransientError(err);
       const maxAttempts = isTransient ? MAX_RETRIES_TRANSIENT : MAX_RETRIES_DEFAULT;
       if (attempt >= maxAttempts) break;
@@ -375,7 +406,7 @@ async function _callAnthropic(apiKey, model, base64, prompt) {
 // Gemini posa la clau a la URL i té un flag responseMimeType que força
 // JSON vàlid (elimina d'arrel els ```json``` que Claude posa de vegades).
 
-async function _callGemini(apiKey, model, base64, prompt) {
+async function _callGemini(apiKey, model, base64, prompt, maxOutputTokens = 8000) {
   const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
   const resp = await fetch(url, {
@@ -392,9 +423,9 @@ async function _callGemini(apiKey, model, base64, prompt) {
       }],
       generationConfig: {
         responseMimeType: 'application/json',
-        // 8000 és un límit generós que dóna marge al "thinking" intern de
-        // Gemini 2.5 abans de generar la sortida visible.
-        maxOutputTokens: 8000,
+        // 8000 és el valor inicial; _processPage el pot pujar a 16000 si
+        // detecta MAX_TOKENS (full complex amb molt thinking intern).
+        maxOutputTokens,
         temperature: 0,
       },
     }),
@@ -415,7 +446,17 @@ async function _callGemini(apiKey, model, base64, prompt) {
   }
   const fr = candidate.finishReason;
   if (fr === 'SAFETY')     throw new Error(`Gemini ha refusat per polítiques de seguretat.`);
-  if (fr === 'MAX_TOKENS') throw new Error('Gemini ha retallat la resposta (MAX_TOKENS). Proveu una resolució més alta o un altre model.');
+  if (fr === 'MAX_TOKENS') {
+    // Marquem l'error perquè _processPage pugui escalar adaptativament
+    // (més tokens + imatge més gran) i reintentar SENSE consumir intent.
+    const err = new Error(
+      'Gemini ha retallat la resposta (MAX_TOKENS). ' +
+      'Si veieu aquest error de manera repetida, proveu una resolució superior ' +
+      'o canvieu a Claude Opus.'
+    );
+    err.isMaxTokens = true;
+    throw err;
+  }
   if (fr === 'RECITATION') throw new Error('Gemini ha refusat per "RECITATION".');
 
   const txt = candidate.content?.parts?.find(p => p.text)?.text;

@@ -29,7 +29,7 @@ import {
 import { prevStu, nextStu } from './navigation.js';
 import { loadKeyFile } from './key-loader.js';
 import { openCorrect, doCorrect } from './scoring.js';
-import { exportRespostes, dlResultsXLSX } from './export.js';
+import { exportRespostes, dlResultsXLSX, importRespostes } from './export.js';
 import {
   initUiListeners, toggleDropdown, closeDropdowns, setCloseSettingsFn,
 } from './ui.js';
@@ -77,6 +77,7 @@ on('dd-key-loader',    'click', () => { closeDropdowns(); document.getElementByI
 on('btn-correct',      'click', () => { closeDropdowns(); openCorrect(); });
 on('dd-ai-recognizer', 'click', () => { closeDropdowns(); openAiRecognizer(); });
 on('dd-export-xlsx',   'click', () => { closeDropdowns(); exportRespostes(); });
+on('dd-import-xlsx',  'click', () => { closeDropdowns(); document.getElementById('xlsx-import-file').click(); });
 on('dd-load-pdf',      'click', () => { closeDropdowns(); document.getElementById('pdf-file').click(); });
 
 // Dropdown items — Configuració
@@ -84,9 +85,10 @@ on('dd-settings',   'click', () => { closeDropdowns(); openSettings(); });
 on('dd-clear-data', 'click', () => { closeDropdowns(); clearAllData(); });
 
 // File inputs (hidden)
-on('key-file',        'change', e => loadKeyFile(e.target));
-on('pdf-file',        'change', e => loadPdfFile(e.target));
-on('ai-rec-pdf-file', 'change', e => processAiPdf(e.target));
+on('key-file',          'change', e => loadKeyFile(e.target));
+on('pdf-file',          'change', e => loadPdfFile(e.target));
+on('ai-rec-pdf-file',   'change', e => processAiPdf(e.target));
+on('xlsx-import-file',  'change', e => importRespostes(e.target));
 
 // Initial PDF prompt
 on('btn-skip-pdf',  'click', skipPdf);

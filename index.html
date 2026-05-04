@@ -34,6 +34,7 @@
         <div class="dd-sep"></div>
         <button class="dd-item" id="dd-load-pdf">📄&nbsp; Carregar PDF</button>
         <button class="dd-item" id="dd-export-xlsx">💾&nbsp; Exportar les respostes</button>
+        <button class="dd-item" id="dd-import-xlsx">📂&nbsp; Carregar respostes desades</button>
       </div>
     </div>
     <div class="dropdown" id="dd-cfg">
@@ -66,9 +67,10 @@
 </div>
 
 <!-- Hidden file inputs -->
-<input type="file" id="key-file"        accept=".xlsx" style="display:none">
-<input type="file" id="pdf-file"        accept=".pdf"  style="display:none">
-<input type="file" id="ai-rec-pdf-file" accept=".pdf"  style="display:none">
+<input type="file" id="key-file"          accept=".xlsx" style="display:none">
+<input type="file" id="pdf-file"          accept=".pdf"  style="display:none">
+<input type="file" id="ai-rec-pdf-file"   accept=".pdf"  style="display:none">
+<input type="file" id="xlsx-import-file"  accept=".xlsx" style="display:none">
 
 <!-- Progress -->
 <div class="prog-wrap"><div class="prog-fill" id="prog" style="width:0%"></div></div>

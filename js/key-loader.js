@@ -12,7 +12,29 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 import { Q, LEVELS } from './config.js';
-import { setAnswerKey, setAnswerKeyName } from './state.js';
+import { getAnswerKey, setAnswerKey, setAnswerKeyName } from './state.js';
+
+// ─── Badge helper (used here and by key-editor.js after manual entry) ─
+
+export function updateKeyBadge() {
+  const answerKey = getAnswerKey();
+  const badge     = document.getElementById('key-badge');
+  const btnExport = document.getElementById('dd-export-key');
+
+  if (!answerKey || !Object.keys(answerKey).length) {
+    badge.style.display = 'none';
+    badge.textContent   = '';
+    if (btnExport) btnExport.disabled = true;
+    return;
+  }
+
+  const loaded = LEVELS.filter(lv => answerKey[lv]);
+  badge.textContent  = loaded.length === LEVELS.length
+    ? `✓ ${LEVELS.length} nivells carregats`
+    : `✓ ${loaded.join(', ')}`;
+  badge.style.display = 'inline-block';
+  if (btnExport) btnExport.disabled = false;
+}
 
 // ─── Row label → level / model ──────────────────────────────────────
 
@@ -113,9 +135,6 @@ export function applySheet(wb, sheetName, fileName) {
   setAnswerKey(parsed);
   setAnswerKeyName(`${fileName} › ${sheetName}`);
 
-  // UI: badge + enable the Correct button in the dropdown.
-  const badge = document.getElementById('key-badge');
-  badge.textContent = `✓ ${sheetName}`;
-  badge.style.display = 'inline-block';
+  updateKeyBadge();
   document.getElementById('btn-correct').disabled = false;
 }

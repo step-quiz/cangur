@@ -28,6 +28,8 @@
       <button class="dd-trigger" id="dd-accions-trigger">Accions ▾</button>
       <div class="dd-menu">
         <button class="dd-item" id="dd-key-loader">📂&nbsp; Carregar la clau de respostes</button>
+        <button class="dd-item" id="dd-key-editor">✏️&nbsp; Introduir clau manualment</button>
+        <button class="dd-item" id="dd-export-key" disabled>💾&nbsp; Exportar la clau de respostes</button>
         <button class="dd-item" id="btn-correct" disabled>📊&nbsp; Corregir proves</button>
         <div class="dd-sep"></div>
         <button class="dd-item" id="dd-ai-recognizer">🤖&nbsp; Reconeixement automàtic de respostes</button>
@@ -220,6 +222,51 @@
 
 <!-- ═══ Toast ═══ -->
 <div id="toast"></div>
+
+<!-- ═══ MODAL: Key editor (manual key entry) ═══ -->
+<div class="overlay off" id="key-editor-overlay">
+  <div class="modal" style="min-width:360px;max-width:460px;width:90vw">
+
+    <!-- Step 1: level + model picker -->
+    <div id="ke-step-pick">
+      <div class="m-title">✏️ Introduir clau manualment</div>
+      <div style="font-size:.58rem;color:var(--muted);text-align:center;margin-bottom:12px">
+        Selecciona el nivell i el model
+      </div>
+      <div class="level-btns" id="ke-level-btns"></div>
+      <div style="font-size:.56rem;color:var(--muted);text-align:center;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.07em;font-weight:700">
+        Model
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:18px">
+        <button class="model-btn" id="ke-mA">A</button>
+        <button class="model-btn" id="ke-mB">B</button>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button class="btn" id="ke-btn-cancel-pick">Cancel·lar</button>
+        <button class="btn pri" id="ke-btn-start" disabled>Continuar →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: answer entry -->
+    <div id="ke-step-enter" style="display:none">
+      <div class="m-title" id="ke-enter-title">Clau</div>
+      <div id="ke-grid" style="display:flex;gap:6px;margin:10px 0 8px"></div>
+      <div style="background:var(--border);border-radius:6px;height:4px;overflow:hidden;margin-bottom:4px">
+        <div id="ke-prog" style="height:100%;width:0%;background:var(--accent);transition:width .2s ease;border-radius:6px"></div>
+      </div>
+      <div style="font-size:.58rem;color:var(--muted);text-align:center;margin-bottom:6px">
+        <span id="ke-filled">0 / 30</span>
+      </div>
+      <div style="font-size:.52rem;color:var(--muted);text-align:center;letter-spacing:.04em;margin-bottom:12px" id="ke-kbd-hint"></div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button class="btn" id="ke-btn-back">← Tornar</button>
+        <button class="btn" id="ke-btn-erase">⌫ Esborra</button>
+        <button class="btn pri" id="ke-btn-confirm" disabled>✓ Confirmar</button>
+      </div>
+    </div>
+
+  </div>
+</div>
 
 <!-- ═══ MODAL: AI recognizer ═══ -->
 <div class="overlay off" id="ai-rec-overlay">

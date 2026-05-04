@@ -28,6 +28,9 @@ import {
 } from './student-modal.js';
 import { prevStu, nextStu } from './navigation.js';
 import { loadKeyFile } from './key-loader.js';
+import {
+  openKeyEditor, initKeyEditorListeners, initKeyEditorKeyboard, exportKeyXlsx,
+} from './key-editor.js';
 import { openCorrect, doCorrect } from './scoring.js';
 import { exportRespostes, dlResultsXLSX, importRespostes } from './export.js';
 import {
@@ -56,6 +59,8 @@ initStudentModalListeners();
 initPdfResizeListener();
 initUiListeners();
 initMainKeyboard();
+initKeyEditorListeners();
+initKeyEditorKeyboard();
 
 // ─── 4. DOM event handlers ────────────────────────────────────────────
 function on(id, evt, fn) {
@@ -74,6 +79,8 @@ on('dd-cfg-trigger',     'click', () => toggleDropdown('dd-cfg'));
 
 // Dropdown items — Accions
 on('dd-key-loader',    'click', () => { closeDropdowns(); document.getElementById('key-file').click(); });
+on('dd-key-editor',    'click', () => { closeDropdowns(); openKeyEditor(); });
+on('dd-export-key',    'click', () => { closeDropdowns(); exportKeyXlsx(); });
 on('btn-correct',      'click', () => { closeDropdowns(); openCorrect(); });
 on('dd-ai-recognizer', 'click', () => { closeDropdowns(); openAiRecognizer(); });
 on('dd-export-xlsx',   'click', () => { closeDropdowns(); exportRespostes(); });

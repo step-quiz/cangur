@@ -118,8 +118,11 @@ export function doCorrect() {
     const s = scoreStudent(stuMap[code], key);
     rows.push({ code, name: stuNames[code] || '', model, ...s });
   }
-  // Sort descending by total: highest score first.
-  rows.sort((a, b) => b.total - a.total);
+  // Mantenim l'ordre original d'introducció dels alumnes (stuOrder) en
+  // comptes d'ordenar per nota descendent. Així l'usuari conserva la
+  // correspondència entre fila de la taula i ordre d'entrada de les dades
+  // (p.ex. ordre del PDF processat per la IA, o ordre d'entrada manual).
+  // La columna "#" mostrarà aquest ordre, no un rànquing.
 
   setLastResults({ level: sel, rows });
   renderResults(getLastResults());

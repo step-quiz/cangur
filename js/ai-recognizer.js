@@ -4,17 +4,23 @@
 //
 // Adaptació del mòdul homònim de comp4eso al format de la prova Cangur:
 //   - 30 preguntes amb opcions A / B / C / D / E (totes abcde).
-//   - Format de codi d'alumne: 3 dígits.
-//   - Model A / B detectat al full (si és visible).
+//   - La IA NO intenta llegir el codi d'alumne, el nom manuscrit ni el
+//     model A/B. Aquestes dades les introdueix l'usuari manualment
+//     (ordre del PDF, modal d'alumne). Empíricament la lectura del codi
+//     és poc fiable (els models hi confonen dígits) i gasta tokens de
+//     "thinking" que no aporten valor; donar-los per estables al PDF
+//     ordenat estalvia cost i evita errades.
 //
 // Flux:
 //   1. L'usuari selecciona model i resolució, introdueix l'API key i
-//      puja el PDF.
+//      puja el PDF (en l'ordre que vol que apareguin els alumnes).
 //   2. Cada pàgina es renderitza via pdf.js → canvas → base64 JPEG.
 //   3. Es crida directament l'endpoint del proveïdor escollit.
-//   4. La IA retorna JSON amb id_alumne + model + respostes Q01..Q30.
+//   4. La IA retorna JSON amb les respostes Q01..Q30 (i un comentari).
 //   5. _normalitzarResposta() converteix els valors crus al format intern.
-//   6. Les dades es carreguen a l'estat de l'app.
+//   6. Cada pàgina es desa com a alumne nou amb codi seqüencial 101, 102,
+//      103... i model "A" per defecte. L'usuari pot editar-ho després
+//      des de la modal d'alumne.
 // ═══════════════════════════════════════════════════════════════════════
 
 import { Q } from './config.js';
@@ -205,9 +211,7 @@ export async function processAiPdf(input) {
           const valides = Object.values(result.respostes)
             .filter(v => v && v !== '?' && v !== '').length;
           _appendLog(
-            `Pàg. ${p} — <strong>${esc(result.id_alumne || '(sense codi)')}</strong>` +
-            ` (model ${esc(result.model || '?')})` +
-            ` — ${valides}/${Q} respostes` +
+            `Pàg. ${p} — <strong>${valides}/${Q}</strong> respostes detectades` +
             (result.comentari ? ` — <em>${esc(result.comentari.slice(0, 80))}</em>` : ''),
             'ok'
           );
@@ -331,8 +335,6 @@ async function _processPage(pdfDoc, pageNum, apiKey, model, scale) {
   const respostes = {};
   for (let i = 0; i < Q; i++) respostes[`Q${String(i + 1).padStart(2, '0')}`] = '?';
   return {
-    id_alumne: '',
-    model: '',
     respostes,
     comentari: `ERROR: ${lastErr?.message}`,
     _failed: true,
@@ -485,12 +487,9 @@ function _validarResposta(data) {
     if (v === '') v = '?';
     respostes[qid] = v;
   }
-  // model: prefer explicit field, fall back to scanning id_alumne for "B".
-  let model = String(data.model ?? '').trim().toUpperCase();
-  if (model !== 'A' && model !== 'B') model = '';
+  // No extreiem ni id_alumne ni model: es generen seqüencialment a
+  // _loadResultsIntoApp i l'usuari els pot editar després.
   return {
-    id_alumne: String(data.id_alumne ?? '').trim(),
-    model,
     respostes,
     comentari: String(data.comentari ?? '').trim(),
   };
@@ -528,27 +527,17 @@ function _loadResultsIntoApp(results) {
   const newStuModels = {};
   const newStuNames  = {};
   const newStuOrder  = [];
-  const usedCodes    = new Set();
 
   results.forEach((result, i) => {
-    // Try to use the AI-detected code; fall back to a 3-digit sequence.
-    let code = String(result.id_alumne || '').trim();
-    // Keep only digits (AI might add '#' or 'codi:' prefixes).
-    code = code.replace(/\D/g, '');
-    if (code.length > 3) code = code.slice(-3);  // last 3 digits if longer
-    if (code.length < 3 || usedCodes.has(code)) {
-      // Synthetic code "1_X_Y" where X_Y is the 1-based slot, padded.
-      code = String(100 + i + 1).padStart(3, '0');
-      // If even that collides (very unlikely), keep bumping.
-      while (usedCodes.has(code)) {
-        code = String(parseInt(code, 10) + 1).padStart(3, '0');
-      }
-    }
-    usedCodes.add(code);
+    // Codi seqüencial determinístic: 101, 102, 103... (mateixa convenció
+    // que abans usàvem com a fallback). L'usuari sap que la pàg. N del
+    // PDF correspon a l'alumne amb codi 100+N. Si vol un codi diferent
+    // (p.ex. el codi real de l'alumne), pot editar-lo a la modal.
+    const code = String(100 + i + 1).padStart(3, '0');
 
     newStuOrder.push(code);
-    newStuNames[code]  = '';                            // OMR doesn't read the name reliably
-    newStuModels[code] = result.model || 'A';           // default to A if unknown
+    newStuNames[code]  = '';      // L'usuari l'omple manualment.
+    newStuModels[code] = 'A';     // Per defecte. Editable a la modal.
     newStuMap[code]    = Array(Q).fill(null).map((_, qi) => {
       const qid = `Q${String(qi + 1).padStart(2, '0')}`;
       return _normalitzarResposta(result.respostes[qid]);
@@ -658,18 +647,8 @@ encara queden marques voluntàries en MÉS D'UNA opció, retorna «!».
 
 9. FORMAT DE SORTIDA: minúscula 'a', 'b', 'c', 'd' o 'e' (o «—», «?», «!»).
 
-CODI D'ALUMNE: Si veus a la part superior del full un codi numèric de 3 dígits (típicament \
-començant per 1: 1xx), transcriu-lo al camp "id_alumne" com a 3 dígits (p.ex. "123"). Si hi ha \
-un nom o text, ignora'l. Si no es veu cap codi clar, posa "id_alumne" com a string buit "".
-
-MODEL: Si el full indica si és model A o model B (sovint marcat amb una creu o cercle al \
-costat de la lletra a la capçalera), posa "model" amb el valor "A" o "B". Si no es pot \
-determinar, deixa "model" com a string buit "".
-
 FORMAT DE SORTIDA OBLIGATORI (JSON estricte, res més):
 {
-  "id_alumne": "...",
-  "model": "A" | "B" | "",
   "respostes": {
 ${jsonKeys}
   },
@@ -677,7 +656,9 @@ ${jsonKeys}
 }
 
 Retorna NOMÉS aquest JSON, sense \`\`\`json ni cap altre text.
-Cada clau Q01..Q30 ha de tenir un valor: una lletra minúscula (a–e), o «—», «?», «!».`;
+Cada clau Q01..Q30 ha de tenir un valor: una lletra minúscula (a–e), o «—», «?», «!».
+NO incloguis cap altre camp al JSON: no et demanem ni codi d'alumne, ni nom, ni model A/B.
+Centra't EXCLUSIVAMENT en les 30 respostes.`;
 }
 
 // ─── Helpers UI ─────────────────────────────────────────────────────

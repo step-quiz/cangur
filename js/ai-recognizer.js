@@ -57,12 +57,10 @@ const RETRY_BACKOFF_MS = [5000, 10000, 15000, 40000];
 // 288 DPI). Per al Cangur la dificultat és comparable: full OMR amb 30
 // caselles A-E per pàgina.
 const MODEL_CHOICES = [
-  { id: 'gemini-2.5-pro',         provider: 'google',    label: 'Gemini 2.5 Pro — màxima precisió (recomanat)' },
-  { id: 'claude-opus-4-7',        provider: 'anthropic', label: 'Claude Opus 4.7 — alternativa Anthropic (potent)' },
-  { id: 'gemini-2.5-flash',       provider: 'google',    label: 'Gemini 2.5 Flash — equilibri qualitat/cost' },
-  { id: 'claude-sonnet-4-6',      provider: 'anthropic', label: 'Claude Sonnet 4.6 — equilibri qualitat/cost' },
-  { id: 'gemini-2.5-flash-lite',  provider: 'google',    label: 'Gemini 2.5 Flash-Lite — el més econòmic' },
-  { id: 'claude-haiku-4-5',       provider: 'anthropic', label: 'Claude Haiku 4.5 — més ràpid i econòmic' },
+  { id: 'claude-sonnet-4-6', provider: 'anthropic', label: 'Claude Sonnet 4.6' },
+  { id: 'gemini-2.5-pro',    provider: 'google',    label: 'Gemini Pro 2.5' },
+  { id: 'claude-opus-4-7',   provider: 'anthropic', label: 'Claude Opus 4.7' },
+  { id: 'gemini-2.5-flash',  provider: 'google',    label: 'Gemini Flash 2.5' },
 ];
 const DEFAULT_MODEL = MODEL_CHOICES[0].id;
 
